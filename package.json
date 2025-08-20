@@ -1,27 +1,23 @@
 {
-  "name": "antara-guias-api",
+  "name": "guias-monitoreo-real",
   "version": "1.0.0",
-  "description": "API para monitoreo de guías Antara",
-  "main": "server.js",
+  "description": "Sistema de monitoreo de guías conectado a SQL Server real",
+  "main": "server-real.js",
   "scripts": {
-    "start": "node server.js",
-    "build": "echo 'No build step required'"
+    "start": "node server-real.js",
+    "dev": "node server-real.js"
   },
   "dependencies": {
     "express": "^4.18.2",
     "cors": "^2.8.5",
     "mssql": "^10.0.1"
   },
-  "engines": {
-    "node": "18.x"
-  },
   "keywords": [
-    "antara",
     "guias",
     "monitoreo",
-    "sql-server"
+    "sql-server",
+    "antara"
   ],
-  "author": "Antara Solutions",
+  "author": "Tu Nombre",
   "license": "MIT"
 }
-
