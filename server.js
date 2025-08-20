@@ -61,7 +61,7 @@ app.post('/api/waybills', async (req, res) => {
                 w.FOLIO,
                 w.CREATED_ON,
                 w.IS_CANCELLED,
-                l.name as ORIGEN,
+                l.name as DESTINATARIO,
                 ws.STATE as WAYBILL_STATE_ID,
                 CASE 
                     WHEN ws.STATE = 1 THEN 'Generada'
@@ -174,6 +174,7 @@ process.on('SIGINT', async () => {
 });
 
 startServer().catch(console.error);
+
 
 
 
