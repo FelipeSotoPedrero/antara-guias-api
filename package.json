@@ -1,0 +1,27 @@
+{
+  "name": "antara-guias-api",
+  "version": "1.0.0",
+  "description": "API para monitoreo de guías Antara",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "build": "echo 'No build step required'"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "mssql": "^10.0.1"
+  },
+  "engines": {
+    "node": "18.x"
+  },
+  "keywords": [
+    "antara",
+    "guias",
+    "monitoreo",
+    "sql-server"
+  ],
+  "author": "Antara Solutions",
+  "license": "MIT"
+}
+
