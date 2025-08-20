@@ -61,11 +61,12 @@ app.post('/api/waybills', async (req, res) => {
                 w.FOLIO,
                 w.CREATED_ON,
                 w.IS_CANCELLED,
-                l.name,
+                l.name as ORIGEN,
                 ws.STATE as WAYBILL_STATE_ID,
                 CASE 
                     WHEN ws.STATE = 1 THEN 'Generada'
                     WHEN ws.STATE = 4 THEN 'Recepcionada'
+                    WHEN ws.STATE IS NULL THEN 'Generada'
                     ELSE 'Otro'
                 END as ESTADO_DESCRIPCION
             FROM [ANTARA].[ANT_WAYBILL] w
@@ -173,6 +174,7 @@ process.on('SIGINT', async () => {
 });
 
 startServer().catch(console.error);
+
 
 
 
