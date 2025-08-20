@@ -61,8 +61,7 @@ app.post('/api/waybills', async (req, res) => {
                 w.FOLIO,
                 w.CREATED_ON,
                 w.IS_RECEIVED,
-                t.transportation_type,
-                l.location_name
+                l.name
             FROM [ANTARA].[ANT_WAYBILL] w
             LEFT JOIN [ANTARA].[ANT_WAYBILL_HISTORY] wh ON w.ID = wh.ANT_WAYBILL_ID
             LEFT JOIN [ANTARA].[ANT_WAYBILL_TRANSPORTATION] wt ON wt.ANT_WAYBILL_HISTORY_ID = wh.ANT_WAYBILL_ID
@@ -167,4 +166,5 @@ process.on('SIGINT', async () => {
 });
 
 startServer().catch(console.error);
+
 
