@@ -2,10 +2,10 @@
   "name": "guias-monitoreo-real",
   "version": "1.0.0",
   "description": "Sistema de monitoreo de guías conectado a SQL Server real",
-  "main": "server-real.js",
+  "main": "server.js",
   "scripts": {
-    "start": "node server-real.js",
-    "dev": "node server-real.js"
+    "start": "node server.js",
+    "dev": "node server.js"
   },
   "dependencies": {
     "express": "^4.18.2",
@@ -21,3 +21,4 @@
   "author": "Tu Nombre",
   "license": "MIT"
 }
+
