@@ -57,12 +57,19 @@ app.post('/api/waybills', async (req, res) => {
         }
 
         const query = `
-            SELECT TOP 100
+           SELECT TOP 100
                 w.FOLIO,
                 w.CREATED_ON,
-                w.IS_RECEIVED,
-                l.name
+                w.IS_CANCELLED,
+                l.name,
+                ws.STATE as WAYBILL_STATE_ID,
+                CASE 
+                    WHEN ws.STATE = 1 THEN 'Generada'
+                    WHEN ws.STATE = 4 THEN 'Recepcionada'
+                    ELSE 'Otro'
+                END as ESTADO_DESCRIPCION
             FROM [ANTARA].[ANT_WAYBILL] w
+            LEFT JOIN [ANTARA].[ANT_WAYBILL_STATE] ws ON w.ID = ws.ANT_WAYBILL_ID AND ws.IS_ACTIVE = 1
             LEFT JOIN [ANTARA].[ANT_WAYBILL_HISTORY] wh ON w.ID = wh.ANT_WAYBILL_ID
             LEFT JOIN [ANTARA].[ANT_WAYBILL_TRANSPORTATION] wt ON wt.ANT_WAYBILL_HISTORY_ID = wh.ANT_WAYBILL_ID
             LEFT JOIN [ANTARA].[ANT_TRANSPORTATION] t ON wt.ANT_TRANSPORTATION_ID = t.ID
@@ -166,5 +173,6 @@ process.on('SIGINT', async () => {
 });
 
 startServer().catch(console.error);
+
 
 
