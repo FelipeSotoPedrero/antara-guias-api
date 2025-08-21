@@ -134,24 +134,24 @@ app.post('/api/waybills', async (req, res) => {
         
         const result = await sql.query`
             SELECT TOP 50
-                w.FOLIO,
-                w.CREATED_ON,
-                CASE 
-                    WHEN ws.WAYBILL_STATE_ID = 1 THEN 'Generada'
-                    WHEN ws.WAYBILL_STATE_ID = 4 THEN 'Recepcionada'
-                    ELSE 'Otro'
-                END as ESTADO,
-                ws.WAYBILL_STATE_ID,
-                ISNULL(l.name, 'N/A') as location_name
-            FROM [ANTARA].[ANT_WAYBILL] w
-            LEFT JOIN [ANTARA].[ANT_WAYBILL_STATE] ws ON w.ID = ws.ANT_WAYBILL_ID AND ws.IS_ACTIVE = 1
-            LEFT JOIN [ANTARA].[ANT_WAYBILL_HISTORY] wh ON w.ID = wh.ANT_WAYBILL_ID
-            LEFT JOIN [ANTARA].[ANT_WAYBILL_TRANSPORTATION] wt ON wt.ANT_WAYBILL_HISTORY_ID = wh.ANT_WAYBILL_ID
-            LEFT JOIN [ANTARA].[ANT_TRANSPORTATION] t ON wt.ANT_TRANSPORTATION_ID = t.ID
-            LEFT JOIN [ANTARA].[ANT_LOCATION] l ON t.LOCATION_ORIGIN_ID = l.ID
-            WHERE CAST(w.CREATED_ON AS DATE) = ${fecha}
-                AND w.IS_CANCELLED = 0
-            ORDER BY w.CREATED_ON DESC
+					w.FOLIO,
+					w.CREATED_ON,
+					CASE 
+						WHEN ws.STATE = 1 THEN 'Generada'
+						WHEN ws.STATE = 4 THEN 'Recepcionada'
+						ELSE 'Otro'
+					END as ESTADO,
+					ws.STATE,
+					ISNULL(l.name, 'N/A') as location_name
+				FROM [ANTARA].[ANT_WAYBILL] w
+				LEFT JOIN [ANTARA].[ANT_WAYBILL_STATE] ws ON w.ID = ws.ANT_WAYBILL_ID AND ws.IS_ACTIVE = 1
+				LEFT JOIN [ANTARA].[ANT_WAYBILL_HISTORY] wh ON w.ID = wh.ANT_WAYBILL_ID
+				LEFT JOIN [ANTARA].[ANT_WAYBILL_TRANSPORTATION] wt ON wt.ANT_WAYBILL_HISTORY_ID = wh.ANT_WAYBILL_ID
+				LEFT JOIN [ANTARA].[ANT_TRANSPORTATION] t ON wt.ANT_TRANSPORTATION_ID = t.ID
+				LEFT JOIN [ANTARA].[ANT_LOCATION] l ON t.LOCATION_ORIGIN_ID = l.ID
+				WHERE CAST(w.CREATED_ON AS DATE) = ${fecha}
+					AND w.IS_CANCELLED = 0
+				ORDER BY w.CREATED_ON DESC
         `;
 
         res.json({
@@ -187,4 +187,5 @@ app.listen(PORT, () => {
     console.log(`📊 API disponible en: /api/waybills`);
     console.log(`🏥 Health check: /health`);
 });
+
 
