@@ -35,6 +35,12 @@ app.use(cors({
 
 app.use(express.json());
 
+// Middleware de logging para debug
+app.use((req, res, next) => {
+    console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
+    next();
+});
+
 // Configuración de credenciales (en producción deberían estar en variables de entorno)
 const VALID_CREDENTIALS = {
     'monitor@antarasolutions.com': 'monitor.2025'
@@ -133,7 +139,7 @@ app.post('/api/waybills', async (req, res) => {
         await sql.connect(sqlConfig);
         
         const result = await sql.query`
-            SELECT TOP 50
+           SELECT TOP 50
 					w.FOLIO,
 					w.CREATED_ON,
 					CASE 
@@ -149,9 +155,9 @@ app.post('/api/waybills', async (req, res) => {
 				LEFT JOIN [ANTARA].[ANT_WAYBILL_TRANSPORTATION] wt ON wt.ANT_WAYBILL_HISTORY_ID = wh.ANT_WAYBILL_ID
 				LEFT JOIN [ANTARA].[ANT_TRANSPORTATION] t ON wt.ANT_TRANSPORTATION_ID = t.ID
 				LEFT JOIN [ANTARA].[ANT_LOCATION] l ON t.LOCATION_ORIGIN_ID = l.ID
-				WHERE CAST(w.CREATED_ON AS DATE) = ${fecha}
+				WHERE CAST(w.CREATED_ON AS DATE) = '2025-08-18'
 					AND w.IS_CANCELLED = 0
-				ORDER BY w.CREATED_ON DESC
+				ORDER BY w.CREATED_ON DESC = ${fecha}
         `;
 
         res.json({
@@ -174,6 +180,63 @@ app.post('/api/waybills', async (req, res) => {
     }
 });
 
+// Endpoint para obtener guías por rango de fechas
+app.post('/api/waybills/range', async (req, res) => {
+    try {
+        const { fechaDesde, fechaHasta } = req.body;
+        
+        if (!fechaDesde || !fechaHasta) {
+            return res.status(400).json({
+                success: false,
+                error: 'Fechas desde y hasta son requeridas'
+            });
+        }
+
+        await sql.connect(sqlConfig);
+        
+        const result = await sql.query`
+            SELECT TOP 100
+                w.FOLIO,
+                w.CREATED_ON,
+                CASE 
+                    WHEN ws.STATE = 1 THEN 'Generada'
+                    WHEN ws.STATE = 4 THEN 'Recepcionada'
+                    ELSE 'Otro'
+                END as ESTADO,
+                ws.STATE,
+                ISNULL(l.name, 'N/A') as location_name
+            FROM [ANTARA].[ANT_WAYBILL] w
+            LEFT JOIN [ANTARA].[ANT_WAYBILL_STATE] ws ON w.ID = ws.ANT_WAYBILL_ID AND ws.IS_ACTIVE = 1
+            LEFT JOIN [ANTARA].[ANT_WAYBILL_HISTORY] wh ON w.ID = wh.ANT_WAYBILL_ID
+            LEFT JOIN [ANTARA].[ANT_WAYBILL_TRANSPORTATION] wt ON wt.ANT_WAYBILL_HISTORY_ID = wh.ANT_WAYBILL_ID
+            LEFT JOIN [ANTARA].[ANT_TRANSPORTATION] t ON wt.ANT_TRANSPORTATION_ID = t.ID
+            LEFT JOIN [ANTARA].[ANT_LOCATION] l ON t.LOCATION_ORIGIN_ID = l.ID
+            WHERE CAST(w.CREATED_ON AS DATE) BETWEEN ${fechaDesde} AND ${fechaHasta}
+                AND w.IS_CANCELLED = 0
+            ORDER BY w.CREATED_ON DESC
+        `;
+
+        res.json({
+            success: true,
+            data: result.recordset,
+            count: result.recordset.length,
+            fechaDesde: fechaDesde,
+            fechaHasta: fechaHasta,
+            timestamp: new Date().toISOString()
+        });
+
+    } catch (err) {
+        console.error('Error en consulta de rango:', err);
+        res.status(500).json({
+            success: false,
+            error: 'Error al consultar la base de datos',
+            details: err.message
+        });
+    } finally {
+        sql.close();
+    }
+});
+
 app.get('/health', (req, res) => {
     res.json({
         status: 'OK',
@@ -182,10 +245,21 @@ app.get('/health', (req, res) => {
     });
 });
 
+// Endpoint de health con prefijo /api
+app.get('/api/health', (req, res) => {
+    res.json({
+        status: 'OK',
+        message: 'Servidor funcionando correctamente',
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime(),
+        version: '1.0.0'
+    });
+});
+
 app.listen(PORT, () => {
     console.log(`🚀 Servidor corriendo en puerto ${PORT}`);
     console.log(`📊 API disponible en: /api/waybills`);
-    console.log(`🏥 Health check: /health`);
+    console.log(`📅 API rango disponible en: /api/waybills/range`);
+    console.log(`🔐 API auth disponible en: /api/auth/login`);
+    console.log(`🏥 Health check: /health y /api/health`);
 });
-
-
