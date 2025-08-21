@@ -5,27 +5,109 @@ const sql = require('mssql');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Middleware
-app.use(cors({
-    origin: '*',
-    methods: ['GET', 'POST', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization']
-}));
-app.use(express.json());
-app.use(express.static('.')); // Servir archivos estáticos
+// Rate limiting simple para prevenir ataques de fuerza bruta
+const loginAttempts = new Map();
+const MAX_ATTEMPTS = 5;
+const BLOCK_TIME = 15 * 60 * 1000; // 15 minutos
 
-// Logging middleware
-app.use((req, res, next) => {
-    console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
-    next();
+function checkRateLimit(ip) {
+    const now = Date.now();
+    const attempts = loginAttempts.get(ip) || { count: 0, firstAttempt: now };
+    
+    // Reset si ya pasó el tiempo de bloqueo
+    if (now - attempts.firstAttempt > BLOCK_TIME) {
+        attempts.count = 0;
+        attempts.firstAttempt = now;
+    }
+    
+    // Incrementar intentos
+    attempts.count++;
+    loginAttempts.set(ip, attempts);
+    
+    return attempts.count <= MAX_ATTEMPTS;
+}
+
+app.use(cors({
+    origin: ['https://monitorsg.antarasolutions.com', 'http://localhost:3000'],
+    methods: ['GET', 'POST', 'OPTIONS'],
+    allowedHeaders: ['Content-Type']
+}));
+
+app.use(express.json());
+
+// Configuración de credenciales (en producción deberían estar en variables de entorno)
+const VALID_CREDENTIALS = {
+    'monitor@antarasolutions.com': 'monitor.2025'
+};
+
+// Middleware para validar credenciales
+function validateCredentials(usuario, clave) {
+    return VALID_CREDENTIALS[usuario] === clave;
+}
+
+// Endpoint de autenticación
+app.post('/api/auth/login', (req, res) => {
+    try {
+        const { usuario, clave } = req.body;
+        const clientIP = req.ip || req.connection.remoteAddress;
+        
+        // Verificar rate limiting
+        if (!checkRateLimit(clientIP)) {
+            console.log(`🚫 Intento de login bloqueado desde IP: ${clientIP}`);
+            return res.status(429).json({
+                success: false,
+                message: 'Demasiados intentos de login. Intenta nuevamente en 15 minutos.'
+            });
+        }
+        
+        // Validar que se proporcionen ambos campos
+        if (!usuario || !clave) {
+            return res.status(400).json({
+                success: false,
+                message: 'Usuario y contraseña son requeridos'
+            });
+        }
+        
+        // Validar credenciales
+        if (validateCredentials(usuario, clave)) {
+            console.log(`✅ Login exitoso para usuario: ${usuario} desde IP: ${clientIP}`);
+            res.json({
+                success: true,
+                message: 'Autenticación exitosa',
+                usuario: usuario,
+                timestamp: new Date().toISOString()
+            });
+        } else {
+            console.log(`❌ Login fallido para usuario: ${usuario} desde IP: ${clientIP}`);
+            res.status(401).json({
+                success: false,
+                message: 'Usuario o contraseña incorrectos'
+            });
+        }
+        
+    } catch (error) {
+        console.error('Error en autenticación:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error interno del servidor'
+        });
+    }
 });
 
-// Configuración de SQL Server
+// Endpoint para verificar estado de sesión
+app.get('/api/auth/status', (req, res) => {
+    res.json({
+        success: true,
+        authenticated: true,
+        timestamp: new Date().toISOString()
+    });
+});
+
 const sqlConfig = {
-    user: process.env.DB_USER || 'antarasql-cs-admin',
-    password: process.env.DB_PASSWORD || 'cssql$db01',
-    database: process.env.DB_NAME || 'sierragorda-prod',
-    server: process.env.DB_SERVER || 'antara-cs-sqlprod.database.windows.net',
+    user: 'antarasql-cs-admin',
+    password: 'cssql$db01',
+    database: 'sierragorda-prod',
+    server: 'antara-cs-sqlprod.database.windows.net',
     pool: {
         max: 10,
         min: 0,
@@ -37,199 +119,72 @@ const sqlConfig = {
     }
 };
 
-// Función para conectar a la base de datos
-async function connectDB() {
-    try {
-        await sql.connect(sqlConfig);
-        console.log('✅ Conectado a SQL Server');
-    } catch (err) {
-        console.error('❌ Error conectando a SQL Server:', err);
-    }
-}
-
-// Endpoint para obtener guías por fecha
 app.post('/api/waybills', async (req, res) => {
     try {
         const { fecha } = req.body;
         
         if (!fecha) {
-            return res.status(400).json({ error: 'Fecha es requerida' });
+            return res.status(400).json({
+                success: false,
+                error: 'Fecha es requerida'
+            });
         }
 
-        const query = `
-            SELECT TOP 100
+        await sql.connect(sqlConfig);
+        
+        const result = await sql.query`
+            SELECT TOP 50
                 w.FOLIO,
                 w.CREATED_ON,
-                ws.SET_ON as FECHA_ESTADO,
-                w.IS_CANCELLED,
-                l.name as DESTINATARIO,
-                ws.STATE as WAYBILL_STATE_ID,
                 CASE 
-                    WHEN ws.STATE = 1 THEN 'Generada'
-                    WHEN ws.STATE = 4 THEN 'Recepcionada'
-                    WHEN ws.STATE IS NULL THEN 'Generada'
+                    WHEN ws.WAYBILL_STATE_ID = 1 THEN 'Generada'
+                    WHEN ws.WAYBILL_STATE_ID = 4 THEN 'Recepcionada'
                     ELSE 'Otro'
-                END as ESTADO_DESCRIPCION
+                END as ESTADO,
+                ws.WAYBILL_STATE_ID,
+                ISNULL(t.transportation_type, 'N/A') as transportation_type,
+                ISNULL(l.location_name, 'N/A') as location_name
             FROM [ANTARA].[ANT_WAYBILL] w
-            INNER JOIN [ANTARA].[ANT_WAYBILL_STATE] ws ON w.ID = ws.ANT_WAYBILL_ID AND ws.IS_ACTIVE = 1
+            LEFT JOIN [ANTARA].[ANT_WAYBILL_STATE] ws ON w.ID = ws.ANT_WAYBILL_ID AND ws.IS_ACTIVE = 1
             LEFT JOIN [ANTARA].[ANT_WAYBILL_HISTORY] wh ON w.ID = wh.ANT_WAYBILL_ID
             LEFT JOIN [ANTARA].[ANT_WAYBILL_TRANSPORTATION] wt ON wt.ANT_WAYBILL_HISTORY_ID = wh.ANT_WAYBILL_ID
             LEFT JOIN [ANTARA].[ANT_TRANSPORTATION] t ON wt.ANT_TRANSPORTATION_ID = t.ID
             LEFT JOIN [ANTARA].[ANT_LOCATION] l ON t.LOCATION_ORIGIN_ID = l.ID
-            WHERE CAST(ws.SET_ON AS DATE) = @fecha
+            WHERE CAST(w.CREATED_ON AS DATE) = ${fecha}
                 AND w.IS_CANCELLED = 0
-            ORDER BY ws.SET_ON DESC
+            ORDER BY w.CREATED_ON DESC
         `;
 
-        const request = new sql.Request();
-        request.input('fecha', sql.Date, fecha);
-        
-        const result = await request.query(query);
-        
-        console.log(`📊 Encontradas ${result.recordset.length} guías para ${fecha}`);
-        
         res.json({
             success: true,
             data: result.recordset,
-            count: result.recordset.length
+            count: result.recordset.length,
+            fecha: fecha,
+            timestamp: new Date().toISOString()
         });
-        
+
     } catch (err) {
-        console.error('❌ Error en consulta:', err);
-        res.status(500).json({ 
+        console.error('Error:', err);
+        res.status(500).json({
             success: false,
             error: 'Error al consultar la base de datos',
-            details: err.message 
+            details: err.message
         });
+    } finally {
+        sql.close();
     }
 });
 
-// Endpoint para obtener guías por rango de fechas
-app.post('/api/waybills/range', async (req, res) => {
-    try {
-        const { fechaDesde, fechaHasta } = req.body;
-        
-        if (!fechaDesde || !fechaHasta) {
-            return res.status(400).json({ error: 'Fechas desde y hasta son requeridas' });
-        }
-
-        const query = `
-            SELECT TOP 100
-                w.FOLIO,
-                w.CREATED_ON,
-                ws.SET_ON as FECHA_ESTADO,
-                w.IS_CANCELLED,
-                l.name as DESTINATARIO,
-                ws.STATE as WAYBILL_STATE_ID,
-                CASE 
-                    WHEN ws.STATE = 1 THEN 'Generada'
-                    WHEN ws.STATE = 4 THEN 'Recepcionada'
-                    WHEN ws.STATE IS NULL THEN 'Generada'
-                    ELSE 'Otro'
-                END as ESTADO_DESCRIPCION
-            FROM [ANTARA].[ANT_WAYBILL] w
-            INNER JOIN [ANTARA].[ANT_WAYBILL_STATE] ws ON w.ID = ws.ANT_WAYBILL_ID AND ws.IS_ACTIVE = 1
-            LEFT JOIN [ANTARA].[ANT_WAYBILL_HISTORY] wh ON w.ID = wh.ANT_WAYBILL_ID
-            LEFT JOIN [ANTARA].[ANT_WAYBILL_TRANSPORTATION] wt ON wt.ANT_WAYBILL_HISTORY_ID = wh.ANT_WAYBILL_ID
-            LEFT JOIN [ANTARA].[ANT_TRANSPORTATION] t ON wt.ANT_TRANSPORTATION_ID = t.ID
-            LEFT JOIN [ANTARA].[ANT_LOCATION] l ON t.LOCATION_ORIGIN_ID = l.ID
-            WHERE CAST(ws.SET_ON AS DATE) BETWEEN @fechaDesde AND @fechaHasta
-                AND w.IS_CANCELLED = 0
-            ORDER BY ws.SET_ON DESC
-        `;
-
-        const request = new sql.Request();
-        request.input('fechaDesde', sql.Date, fechaDesde);
-        request.input('fechaHasta', sql.Date, fechaHasta);
-        
-        const result = await request.query(query);
-        
-        console.log(`📊 Encontradas ${result.recordset.length} guías del ${fechaDesde} al ${fechaHasta}`);
-        
-        res.json({
-            success: true,
-            data: result.recordset,
-            count: result.recordset.length
-        });
-        
-    } catch (err) {
-        console.error('❌ Error en consulta de rango:', err);
-        res.status(500).json({ 
-            success: false,
-            error: 'Error al consultar la base de datos',
-            details: err.message 
-        });
-    }
-});
-
-// Endpoint de salud
-app.get('/api/health', (req, res) => {
-    res.json({ 
-        status: 'OK', 
-        message: 'Servidor funcionando correctamente',
-        timestamp: new Date().toISOString()
+app.get('/health', (req, res) => {
+    res.json({
+        status: 'OK',
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime()
     });
 });
 
-// Ruta principal
-app.get('/', (req, res) => {
-    res.send(`
-        <html>
-            <head>
-                <title>Servidor de Guías</title>
-                <style>
-                    body { font-family: Arial, sans-serif; padding: 20px; }
-                    .container { max-width: 800px; margin: 0 auto; }
-                    .status { padding: 10px; border-radius: 5px; margin: 10px 0; }
-                    .success { background: #d4edda; color: #155724; }
-                    .info { background: #d1ecf1; color: #0c5460; }
-                </style>
-            </head>
-            <body>
-                <div class="container">
-                    <h1>🚀 Servidor de Guías - SQL Server</h1>
-                    <div class="status success">
-                        ✅ Servidor funcionando en puerto ${PORT}
-                    </div>
-                    <div class="status info">
-                        📊 Base de datos: antara-cs-sqlprod.database.windows.net
-                    </div>
-                    <h2>📋 Endpoints disponibles:</h2>
-                    <ul>
-                        <li><strong>GET /api/health</strong> - Estado del servidor</li>
-                        <li><strong>POST /api/waybills</strong> - Obtener guías por fecha</li>
-                        <li><strong>GET /guias-dia-real.html</strong> - Interfaz web</li>
-                    </ul>
-                    <h2>🔗 Enlaces:</h2>
-                    <ul>
-                        <li><a href="/guias-dia-real.html">📋 Ver interfaz de guías</a></li>
-                        <li><a href="/api/health">🔍 Verificar estado del servidor</a></li>
-                    </ul>
-                </div>
-            </body>
-        </html>
-    `);
+app.listen(PORT, () => {
+    console.log(`🚀 Servidor corriendo en puerto ${PORT}`);
+    console.log(`📊 API disponible en: /api/waybills`);
+    console.log(`🏥 Health check: /health`);
 });
-
-// Iniciar servidor
-async function startServer() {
-    await connectDB();
-    
-    app.listen(PORT, () => {
-        console.log(`🚀 Servidor ejecutándose en http://localhost:${PORT}`);
-        console.log(`📋 Interfaz disponible en http://localhost:${PORT}/guias-dia-real.html`);
-    });
-}
-
-// Manejo de errores no capturados
-process.on('unhandledRejection', (err) => {
-    console.error('❌ Error no manejado:', err);
-});
-
-process.on('SIGINT', async () => {
-    console.log('\n🛑 Cerrando servidor...');
-    await sql.close();
-    process.exit(0);
-});
-
-startServer().catch(console.error);
