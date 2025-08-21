@@ -292,12 +292,13 @@ app.get('/api/health', (req, res) => {
 app.listen(PORT, () => {
     console.log(`🚀 Servidor corriendo en puerto ${PORT}`);
     console.log(`📊 Base de datos: sierragorda-prod`);
-    console.log(`👤 Usuario: monitor@antarasolutions.com`);
+    console.log(`👤 Usuario: antarasql-cs-admin`);
     console.log(`📊 API disponible en: /api/waybills`);
     console.log(`📅 API rango disponible en: /api/waybills/range`);
     console.log(`🔐 API auth disponible en: /api/auth/login`);
     console.log(`🏥 Health check: /health y /api/health`);
 });
+
 
 
 
