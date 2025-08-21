@@ -142,8 +142,7 @@ app.post('/api/waybills', async (req, res) => {
                     ELSE 'Otro'
                 END as ESTADO,
                 ws.WAYBILL_STATE_ID,
-                ISNULL(t.transportation_type, 'N/A') as transportation_type,
-                ISNULL(l.location_name, 'N/A') as location_name
+                ISNULL(l.name, 'N/A') as location_name
             FROM [ANTARA].[ANT_WAYBILL] w
             LEFT JOIN [ANTARA].[ANT_WAYBILL_STATE] ws ON w.ID = ws.ANT_WAYBILL_ID AND ws.IS_ACTIVE = 1
             LEFT JOIN [ANTARA].[ANT_WAYBILL_HISTORY] wh ON w.ID = wh.ANT_WAYBILL_ID
@@ -188,3 +187,4 @@ app.listen(PORT, () => {
     console.log(`📊 API disponible en: /api/waybills`);
     console.log(`🏥 Health check: /health`);
 });
+
