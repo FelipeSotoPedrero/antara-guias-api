@@ -150,14 +150,14 @@ app.post('/api/waybills', async (req, res) => {
         const result = await sql.query`
             SELECT TOP 50
                 w.FOLIO,
-                w.CREATED_ON,
+                w.CREATED_ON as FECHA_ESTADO,
                 CASE 
                     WHEN ws.STATE = 1 THEN 'Generada'
                     WHEN ws.STATE = 4 THEN 'Recepcionada'
                     ELSE 'Otro'
                 END as ESTADO,
                 ws.STATE,
-                ISNULL(l.name, 'N/A') as location_name
+                ISNULL(l.name, 'N/A') as DESTINATARIO
             FROM [ANTARA].[ANT_WAYBILL] w
             LEFT JOIN [ANTARA].[ANT_WAYBILL_STATE] ws ON w.ID = ws.ANT_WAYBILL_ID AND ws.IS_ACTIVE = 1
             LEFT JOIN [ANTARA].[ANT_WAYBILL_HISTORY] wh ON w.ID = wh.ANT_WAYBILL_ID
@@ -298,4 +298,5 @@ app.listen(PORT, () => {
     console.log(`🔐 API auth disponible en: /api/auth/login`);
     console.log(`🏥 Health check: /health y /api/health`);
 });
+
 
