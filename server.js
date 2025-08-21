@@ -43,7 +43,7 @@ app.use((req, res, next) => {
 
 // Configuración de credenciales (en producción deberían estar en variables de entorno)
 const VALID_CREDENTIALS = {
-    'monitor@antarasolutions.com': 'monitor.2025'
+    'monitor': 'monitor.2025'
 };
 
 // Middleware para validar credenciales
@@ -110,7 +110,7 @@ app.get('/api/auth/status', (req, res) => {
 });
 
 const sqlConfig = {
-    user: 'antarasql-cs-admin',
+    user: 'monitor@antarasolutions.com',
     password: 'cssql$db01',
     database: 'sierragorda-prod',
     server: 'antara-cs-sqlprod.database.windows.net',
@@ -136,28 +136,37 @@ app.post('/api/waybills', async (req, res) => {
             });
         }
 
+        // Validar formato de fecha (YYYY-MM-DD)
+        const fechaRegex = /^\d{4}-\d{2}-\d{2}$/;
+        if (!fechaRegex.test(fecha)) {
+            return res.status(400).json({
+                success: false,
+                error: 'Formato de fecha inválido. Use YYYY-MM-DD'
+            });
+        }
+
         await sql.connect(sqlConfig);
         
         const result = await sql.query`
-           SELECT TOP 50
-					w.FOLIO,
-					w.CREATED_ON,
-					CASE 
-						WHEN ws.STATE = 1 THEN 'Generada'
-						WHEN ws.STATE = 4 THEN 'Recepcionada'
-						ELSE 'Otro'
-					END as ESTADO,
-					ws.STATE,
-					ISNULL(l.name, 'N/A') as location_name
-				FROM [ANTARA].[ANT_WAYBILL] w
-				LEFT JOIN [ANTARA].[ANT_WAYBILL_STATE] ws ON w.ID = ws.ANT_WAYBILL_ID AND ws.IS_ACTIVE = 1
-				LEFT JOIN [ANTARA].[ANT_WAYBILL_HISTORY] wh ON w.ID = wh.ANT_WAYBILL_ID
-				LEFT JOIN [ANTARA].[ANT_WAYBILL_TRANSPORTATION] wt ON wt.ANT_WAYBILL_HISTORY_ID = wh.ANT_WAYBILL_ID
-				LEFT JOIN [ANTARA].[ANT_TRANSPORTATION] t ON wt.ANT_TRANSPORTATION_ID = t.ID
-				LEFT JOIN [ANTARA].[ANT_LOCATION] l ON t.LOCATION_ORIGIN_ID = l.ID
-				WHERE CAST(w.CREATED_ON AS DATE) = '2025-08-18'
-					AND w.IS_CANCELLED = 0
-				ORDER BY w.CREATED_ON DESC = ${fecha}
+            SELECT TOP 50
+                w.FOLIO,
+                w.CREATED_ON,
+                CASE 
+                    WHEN ws.STATE = 1 THEN 'Generada'
+                    WHEN ws.STATE = 4 THEN 'Recepcionada'
+                    ELSE 'Otro'
+                END as ESTADO,
+                ws.STATE,
+                ISNULL(l.name, 'N/A') as location_name
+            FROM [ANTARA].[ANT_WAYBILL] w
+            LEFT JOIN [ANTARA].[ANT_WAYBILL_STATE] ws ON w.ID = ws.ANT_WAYBILL_ID AND ws.IS_ACTIVE = 1
+            LEFT JOIN [ANTARA].[ANT_WAYBILL_HISTORY] wh ON w.ID = wh.ANT_WAYBILL_ID
+            LEFT JOIN [ANTARA].[ANT_WAYBILL_TRANSPORTATION] wt ON wt.ANT_WAYBILL_HISTORY_ID = wh.ANT_WAYBILL_ID
+            LEFT JOIN [ANTARA].[ANT_TRANSPORTATION] t ON wt.ANT_TRANSPORTATION_ID = t.ID
+            LEFT JOIN [ANTARA].[ANT_LOCATION] l ON t.LOCATION_ORIGIN_ID = l.ID
+            WHERE CAST(w.CREATED_ON AS DATE) = ${fecha}
+                AND w.IS_CANCELLED = 0
+            ORDER BY w.CREATED_ON DESC
         `;
 
         res.json({
@@ -169,14 +178,21 @@ app.post('/api/waybills', async (req, res) => {
         });
 
     } catch (err) {
-        console.error('Error:', err);
+        console.error('Error en consulta de waybills:', err);
+        console.error('Fecha recibida:', fecha);
+        console.error('Tipo de fecha:', typeof fecha);
         res.status(500).json({
             success: false,
             error: 'Error al consultar la base de datos',
-            details: err.message
+            details: err.message,
+            fecha: fecha
         });
     } finally {
-        sql.close();
+        try {
+            await sql.close();
+        } catch (closeErr) {
+            console.error('Error cerrando conexión:', closeErr);
+        }
     }
 });
 
@@ -189,6 +205,15 @@ app.post('/api/waybills/range', async (req, res) => {
             return res.status(400).json({
                 success: false,
                 error: 'Fechas desde y hasta son requeridas'
+            });
+        }
+
+        // Validar formato de fechas (YYYY-MM-DD)
+        const fechaRegex = /^\d{4}-\d{2}-\d{2}$/;
+        if (!fechaRegex.test(fechaDesde) || !fechaRegex.test(fechaHasta)) {
+            return res.status(400).json({
+                success: false,
+                error: 'Formato de fecha inválido. Use YYYY-MM-DD'
             });
         }
 
@@ -227,13 +252,21 @@ app.post('/api/waybills/range', async (req, res) => {
 
     } catch (err) {
         console.error('Error en consulta de rango:', err);
+        console.error('Fecha desde:', fechaDesde);
+        console.error('Fecha hasta:', fechaHasta);
         res.status(500).json({
             success: false,
             error: 'Error al consultar la base de datos',
-            details: err.message
+            details: err.message,
+            fechaDesde: fechaDesde,
+            fechaHasta: fechaHasta
         });
     } finally {
-        sql.close();
+        try {
+            await sql.close();
+        } catch (closeErr) {
+            console.error('Error cerrando conexión:', closeErr);
+        }
     }
 });
 
@@ -258,6 +291,8 @@ app.get('/api/health', (req, res) => {
 
 app.listen(PORT, () => {
     console.log(`🚀 Servidor corriendo en puerto ${PORT}`);
+    console.log(`📊 Base de datos: sierragorda-prod`);
+    console.log(`👤 Usuario: monitor@antarasolutions.com`);
     console.log(`📊 API disponible en: /api/waybills`);
     console.log(`📅 API rango disponible en: /api/waybills/range`);
     console.log(`🔐 API auth disponible en: /api/auth/login`);
