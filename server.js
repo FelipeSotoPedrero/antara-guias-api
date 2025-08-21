@@ -43,7 +43,7 @@ app.use((req, res, next) => {
 
 // Configuración de credenciales (en producción deberían estar en variables de entorno)
 const VALID_CREDENTIALS = {
-    'monitor': 'monitor.2025'
+    'monitor@antarasolutions.com': 'monitor.2025'
 };
 
 // Middleware para validar credenciales
@@ -110,7 +110,7 @@ app.get('/api/auth/status', (req, res) => {
 });
 
 const sqlConfig = {
-    user: 'monitor@antarasolutions.com',
+    user: 'antarasql-cs-admin',
     password: 'cssql$db01',
     database: 'sierragorda-prod',
     server: 'antara-cs-sqlprod.database.windows.net',
@@ -298,3 +298,4 @@ app.listen(PORT, () => {
     console.log(`🔐 API auth disponible en: /api/auth/login`);
     console.log(`🏥 Health check: /health y /api/health`);
 });
+
