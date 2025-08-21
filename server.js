@@ -24,7 +24,7 @@ app.use((req, res, next) => {
 const sqlConfig = {
     user: process.env.DB_USER || 'antarasql-cs-admin',
     password: process.env.DB_PASSWORD || 'cssql$db01',
-    database: process.env.DB_NAME || 'ANTARA',
+    database: process.env.DB_NAME || 'sierragorda-prod',
     server: process.env.DB_SERVER || 'antara-cs-sqlprod.database.windows.net',
     pool: {
         max: 10,
@@ -231,3 +231,4 @@ process.on('SIGINT', async () => {
 });
 
 startServer().catch(console.error);
+
