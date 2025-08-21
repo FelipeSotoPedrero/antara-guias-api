@@ -22,10 +22,10 @@ app.use((req, res, next) => {
 
 // Configuración de SQL Server
 const sqlConfig = {
-    user: 'antarasql-cs-admin',
-    password: 'cssql$db01',
-    database: 'sierragorda-prod',
-    server: 'antara-cs-sqlprod.database.windows.net',
+    user: process.env.DB_USER || 'antarasql-cs-admin',
+    password: process.env.DB_PASSWORD || 'cssql$db01',
+    database: process.env.DB_NAME || 'ANTARA',
+    server: process.env.DB_SERVER || 'antara-cs-sqlprod.database.windows.net',
     pool: {
         max: 10,
         min: 0,
@@ -57,7 +57,7 @@ app.post('/api/waybills', async (req, res) => {
         }
 
         const query = `
-           SELECT TOP 100
+            SELECT TOP 100
                 w.FOLIO,
                 w.CREATED_ON,
                 w.IS_CANCELLED,
@@ -95,6 +95,63 @@ app.post('/api/waybills', async (req, res) => {
         
     } catch (err) {
         console.error('❌ Error en consulta:', err);
+        res.status(500).json({ 
+            success: false,
+            error: 'Error al consultar la base de datos',
+            details: err.message 
+        });
+    }
+});
+
+// Endpoint para obtener guías por rango de fechas
+app.post('/api/waybills/range', async (req, res) => {
+    try {
+        const { fechaDesde, fechaHasta } = req.body;
+        
+        if (!fechaDesde || !fechaHasta) {
+            return res.status(400).json({ error: 'Fechas desde y hasta son requeridas' });
+        }
+
+        const query = `
+            SELECT TOP 100
+                w.FOLIO,
+                w.CREATED_ON,
+                w.IS_CANCELLED,
+                l.name as DESTINATARIO,
+                ws.STATE as WAYBILL_STATE_ID,
+                CASE 
+                    WHEN ws.STATE = 1 THEN 'Generada'
+                    WHEN ws.STATE = 4 THEN 'Recepcionada'
+                    WHEN ws.STATE IS NULL THEN 'Generada'
+                    ELSE 'Otro'
+                END as ESTADO_DESCRIPCION
+            FROM [ANTARA].[ANT_WAYBILL] w
+            LEFT JOIN [ANTARA].[ANT_WAYBILL_STATE] ws ON w.ID = ws.ANT_WAYBILL_ID AND ws.IS_ACTIVE = 1
+            LEFT JOIN [ANTARA].[ANT_WAYBILL_HISTORY] wh ON w.ID = wh.ANT_WAYBILL_ID
+            LEFT JOIN [ANTARA].[ANT_WAYBILL_TRANSPORTATION] wt ON wt.ANT_WAYBILL_HISTORY_ID = wh.ANT_WAYBILL_ID
+            LEFT JOIN [ANTARA].[ANT_TRANSPORTATION] t ON wt.ANT_TRANSPORTATION_ID = t.ID
+            LEFT JOIN [ANTARA].[ANT_LOCATION] l ON t.LOCATION_ORIGIN_ID = l.ID
+            WHERE CAST(w.CREATED_ON AS DATE) BETWEEN @fechaDesde AND @fechaHasta
+                AND w.IS_CANCELLED = 0
+            ORDER BY w.CREATED_ON DESC
+        `;
+
+        const request = new sql.Request();
+        request.input('fechaDesde', sql.Date, fechaDesde);
+        request.input('fechaHasta', sql.Date, fechaHasta);
+        
+        const result = await request.query(query);
+        
+        console.log(`📊 Encontradas ${result.recordset.length} guías del ${fechaDesde} al ${fechaHasta}`);
+        
+        res.json({
+            success: true,
+            data: result.recordset,
+            count: result.recordset.length
+        });
+        
+    } catch (err) {
+        console.error('❌ Error en consulta de rango:', err);
         res.status(500).json({ 
             success: false,
             error: 'Error al consultar la base de datos',
@@ -174,8 +231,3 @@ process.on('SIGINT', async () => {
 });
 
 startServer().catch(console.error);
-
-
-
-
-
