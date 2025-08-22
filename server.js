@@ -5,6 +5,36 @@ const sql = require('mssql');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Sistema de keep-alive para prevenir cold starts
+let keepAliveInterval = null;
+const KEEP_ALIVE_INTERVAL = 10 * 60 * 1000; // 10 minutos
+
+function startKeepAlive() {
+    if (keepAliveInterval) {
+        clearInterval(keepAliveInterval);
+    }
+    
+    keepAliveInterval = setInterval(async () => {
+        try {
+            // Hacer un request interno para mantener el servidor activo
+            const response = await fetch(`http://localhost:${PORT}/api/health`, {
+                method: 'GET',
+                headers: { 'User-Agent': 'Keep-Alive-System' }
+            });
+            
+            if (response.ok) {
+                console.log(`🔄 Keep-alive ping exitoso: ${new Date().toISOString()}`);
+            } else {
+                console.log(`⚠️ Keep-alive ping falló: ${response.status}`);
+            }
+        } catch (error) {
+            console.log(`❌ Keep-alive ping error: ${error.message}`);
+        }
+    }, KEEP_ALIVE_INTERVAL);
+    
+    console.log(`🚀 Sistema de keep-alive iniciado (cada ${KEEP_ALIVE_INTERVAL/1000} segundos)`);
+}
+
 // Rate limiting simple para prevenir ataques de fuerza bruta
 const loginAttempts = new Map();
 const MAX_ATTEMPTS = 5;
@@ -289,6 +319,53 @@ app.get('/api/health', (req, res) => {
     });
 });
 
+// Endpoint para pre-warming del servidor (solución para cold start)
+app.get('/api/warmup', async (req, res) => {
+    const startTime = Date.now();
+    
+    try {
+        console.log(`🔥 Iniciando pre-warming del servidor...`);
+        
+        // 1. Verificar conexión a BD
+        await sql.connect(sqlConfig);
+        const dbTest = await sql.query`SELECT 1 as test`;
+        await sql.close();
+        
+        // 2. Simular operaciones típicas
+        const warmupData = {
+            timestamp: new Date().toISOString(),
+            uptime: process.uptime(),
+            memoryUsage: process.memoryUsage(),
+            dbConnection: 'OK',
+            serverStatus: 'Warmed up'
+        };
+        
+        const endTime = Date.now();
+        const responseTime = endTime - startTime;
+        
+        console.log(`✅ Pre-warming completado en ${responseTime}ms`);
+        
+        res.json({
+            success: true,
+            message: 'Servidor pre-warmed exitosamente',
+            responseTime: responseTime,
+            data: warmupData,
+            timestamp: new Date().toISOString()
+        });
+        
+    } catch (error) {
+        const endTime = Date.now();
+        console.error('Error en pre-warming:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error en pre-warming',
+            error: error.message,
+            responseTime: endTime - startTime,
+            timestamp: new Date().toISOString()
+        });
+    }
+});
+
 app.listen(PORT, () => {
     console.log(`🚀 Servidor corriendo en puerto ${PORT}`);
     console.log(`📊 Base de datos: sierragorda-prod`);
@@ -297,8 +374,10 @@ app.listen(PORT, () => {
     console.log(`📅 API rango disponible en: /api/waybills/range`);
     console.log(`🔐 API auth disponible en: /api/auth/login`);
     console.log(`🏥 Health check: /health y /api/health`);
+    console.log(`🔥 Pre-warming: /api/warmup`);
+    
+    // Iniciar sistema de keep-alive después de 30 segundos
+    setTimeout(() => {
+        startKeepAlive();
+    }, 30000);
 });
-
-
-
-
