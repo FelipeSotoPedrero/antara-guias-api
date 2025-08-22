@@ -37,8 +37,8 @@ function startKeepAlive() {
 
 // Rate limiting simple para prevenir ataques de fuerza bruta
 const loginAttempts = new Map();
-const MAX_ATTEMPTS = 5;
-const BLOCK_TIME = 15 * 60 * 1000; // 15 minutos
+const MAX_ATTEMPTS = 10;
+const BLOCK_TIME = 5 * 60 * 1000; // 15 minutos
 
 function checkRateLimit(ip) {
     const now = Date.now();
@@ -381,3 +381,4 @@ app.listen(PORT, () => {
         startKeepAlive();
     }, 30000);
 });
+
