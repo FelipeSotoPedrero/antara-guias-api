@@ -157,7 +157,7 @@ const sqlConfig = {
 
 app.post('/api/waybills', async (req, res) => {
     try {
-        const { fecha } = req.body;
+        const { fecha, proveedor } = req.body;
         
         if (!fecha) {
             return res.status(400).json({
@@ -177,27 +177,52 @@ app.post('/api/waybills', async (req, res) => {
 
         await sql.connect(sqlConfig);
         
-        const result = await sql.query`
+        let query = `
             SELECT TOP 50
+                ISNULL(l.name, 'N/A') as PROVEEDOR,
                 w.FOLIO,
                 w.CREATED_ON as FECHA_ESTADO,
+                ISNULL(p.name, 'N/A') as INSUMO,
+                SUM(w.total_weight) as PESAJE_TOTAL,
+                COUNT(*) as CANTIDAD_REGISTROS,
                 CASE 
                     WHEN ws.STATE = 1 THEN 'Generada'
                     WHEN ws.STATE = 4 THEN 'Recepcionada'
                     ELSE 'Otro'
                 END as ESTADO,
-                ws.STATE,
-                ISNULL(l.name, 'N/A') as DESTINATARIO
+                ws.STATE
             FROM [ANTARA].[ANT_WAYBILL] w
             LEFT JOIN [ANTARA].[ANT_WAYBILL_STATE] ws ON w.ID = ws.ANT_WAYBILL_ID AND ws.IS_ACTIVE = 1
-            LEFT JOIN [ANTARA].[ANT_WAYBILL_HISTORY] wh ON w.ID = wh.ANT_WAYBILL_ID
+            INNER JOIN [ANTARA].[ANT_WAYBILL_HISTORY] wh ON w.ID = wh.ANT_WAYBILL_ID
+            INNER JOIN ANTARA.ANT_TRANSACTION_WAYBILL tw ON tw.ant_waybill_history_id = wh.id
+            INNER JOIN antara.ANT_TRANSACTION tr ON tr.id = tw.ant_transaction_id
+            LEFT JOIN [ANTARA].[ANT_PRODUCT] p ON p.id = tr.ant_product_id
             LEFT JOIN [ANTARA].[ANT_WAYBILL_TRANSPORTATION] wt ON wt.ANT_WAYBILL_HISTORY_ID = wh.ANT_WAYBILL_ID
             LEFT JOIN [ANTARA].[ANT_TRANSPORTATION] t ON wt.ANT_TRANSPORTATION_ID = t.ID
             LEFT JOIN [ANTARA].[ANT_LOCATION] l ON t.LOCATION_ORIGIN_ID = l.ID
-            WHERE CAST(w.CREATED_ON AS DATE) = ${fecha}
-                AND w.IS_CANCELLED = 0
-            ORDER BY w.CREATED_ON DESC
-        `;
+            WHERE CAST(w.CREATED_ON AS DATE) = @fecha
+                AND w.IS_CANCELLED = 0`;
+        
+        if (proveedor) {
+            query += ` AND ISNULL(l.name, 'N/A') = @proveedor`;
+        }
+        
+        query += `
+            GROUP BY 
+                ISNULL(l.name, 'N/A'),
+                w.FOLIO,
+                w.CREATED_ON,
+                ISNULL(p.name, 'N/A'),
+                ws.STATE
+            ORDER BY w.CREATED_ON DESC`;
+        
+        const request = new sql.Request();
+        request.input('fecha', sql.Date, fecha);
+        if (proveedor) {
+            request.input('proveedor', sql.NVarChar, proveedor);
+        }
+        
+        const result = await request.query(query);
 
         res.json({
             success: true,
@@ -229,7 +254,7 @@ app.post('/api/waybills', async (req, res) => {
 // Endpoint para obtener guías por rango de fechas
 app.post('/api/waybills/range', async (req, res) => {
     try {
-        const { fechaDesde, fechaHasta } = req.body;
+        const { fechaDesde, fechaHasta, proveedor } = req.body;
         
         if (!fechaDesde || !fechaHasta) {
             return res.status(400).json({
@@ -249,27 +274,53 @@ app.post('/api/waybills/range', async (req, res) => {
 
         await sql.connect(sqlConfig);
         
-        const result = await sql.query`
+        let query = `
             SELECT TOP 100
+                ISNULL(l.name, 'N/A') as PROVEEDOR,
                 w.FOLIO,
                 w.CREATED_ON as FECHA_ESTADO,
+                ISNULL(p.name, 'N/A') as INSUMO,
+                SUM(w.total_weight) as PESAJE_TOTAL,
+                COUNT(*) as CANTIDAD_REGISTROS,
                 CASE 
                     WHEN ws.STATE = 1 THEN 'Generada'
                     WHEN ws.STATE = 4 THEN 'Recepcionada'
                     ELSE 'Otro'
                 END as ESTADO,
-                ws.STATE,
-                ISNULL(l.name, 'N/A') as DESTINATARIO
+                ws.STATE
             FROM [ANTARA].[ANT_WAYBILL] w
             LEFT JOIN [ANTARA].[ANT_WAYBILL_STATE] ws ON w.ID = ws.ANT_WAYBILL_ID AND ws.IS_ACTIVE = 1
-            LEFT JOIN [ANTARA].[ANT_WAYBILL_HISTORY] wh ON w.ID = wh.ANT_WAYBILL_ID
+            INNER JOIN [ANTARA].[ANT_WAYBILL_HISTORY] wh ON w.ID = wh.ANT_WAYBILL_ID
+            INNER JOIN ANTARA.ANT_TRANSACTION_WAYBILL tw ON tw.ant_waybill_history_id = wh.id
+            INNER JOIN antara.ANT_TRANSACTION tr ON tr.id = tw.ant_transaction_id
+            LEFT JOIN [ANTARA].[ANT_PRODUCT] p ON p.id = tr.ant_product_id
             LEFT JOIN [ANTARA].[ANT_WAYBILL_TRANSPORTATION] wt ON wt.ANT_WAYBILL_HISTORY_ID = wh.ANT_WAYBILL_ID
             LEFT JOIN [ANTARA].[ANT_TRANSPORTATION] t ON wt.ANT_TRANSPORTATION_ID = t.ID
             LEFT JOIN [ANTARA].[ANT_LOCATION] l ON t.LOCATION_ORIGIN_ID = l.ID
-            WHERE CAST(w.CREATED_ON AS DATE) BETWEEN ${fechaDesde} AND ${fechaHasta}
-                AND w.IS_CANCELLED = 0
-            ORDER BY w.CREATED_ON DESC
-        `;
+            WHERE CAST(w.CREATED_ON AS DATE) BETWEEN @fechaDesde AND @fechaHasta
+                AND w.IS_CANCELLED = 0`;
+        
+        if (proveedor) {
+            query += ` AND ISNULL(l.name, 'N/A') = @proveedor`;
+        }
+        
+        query += `
+            GROUP BY 
+                ISNULL(l.name, 'N/A'),
+                w.FOLIO,
+                w.CREATED_ON,
+                ISNULL(p.name, 'N/A'),
+                ws.STATE
+            ORDER BY w.CREATED_ON DESC`;
+        
+        const request = new sql.Request();
+        request.input('fechaDesde', sql.Date, fechaDesde);
+        request.input('fechaHasta', sql.Date, fechaHasta);
+        if (proveedor) {
+            request.input('proveedor', sql.NVarChar, proveedor);
+        }
+        
+        const result = await request.query(query);
 
         res.json({
             success: true,
@@ -290,6 +341,46 @@ app.post('/api/waybills/range', async (req, res) => {
             details: err.message,
             fechaDesde: fechaDesde,
             fechaHasta: fechaHasta
+        });
+    } finally {
+        try {
+            await sql.close();
+        } catch (closeErr) {
+            console.error('Error cerrando conexión:', closeErr);
+        }
+    }
+});
+
+// Endpoint para obtener lista de proveedores
+app.get('/api/providers', async (req, res) => {
+    try {
+        await sql.connect(sqlConfig);
+        
+        const result = await sql.query`
+            SELECT DISTINCT ISNULL(l.name, 'N/A') as PROVEEDOR
+            FROM [ANTARA].[ANT_WAYBILL] w
+            LEFT JOIN [ANTARA].[ANT_WAYBILL_HISTORY] wh ON w.ID = wh.ANT_WAYBILL_ID
+            LEFT JOIN [ANTARA].[ANT_WAYBILL_TRANSPORTATION] wt ON wt.ANT_WAYBILL_HISTORY_ID = wh.ANT_WAYBILL_ID
+            LEFT JOIN [ANTARA].[ANT_TRANSPORTATION] t ON wt.ANT_TRANSPORTATION_ID = t.ID
+            LEFT JOIN [ANTARA].[ANT_LOCATION] l ON t.LOCATION_ORIGIN_ID = l.ID
+            WHERE w.IS_CANCELLED = 0
+                AND ISNULL(l.name, 'N/A') != 'N/A'
+            ORDER BY ISNULL(l.name, 'N/A')
+        `;
+
+        res.json({
+            success: true,
+            data: result.recordset.map(row => row.PROVEEDOR),
+            count: result.recordset.length,
+            timestamp: new Date().toISOString()
+        });
+
+    } catch (err) {
+        console.error('Error obteniendo proveedores:', err);
+        res.status(500).json({
+            success: false,
+            error: 'Error al consultar la base de datos',
+            details: err.message
         });
     } finally {
         try {
