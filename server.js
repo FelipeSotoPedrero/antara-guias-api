@@ -178,7 +178,7 @@ app.post('/api/waybills', async (req, res) => {
         await sql.connect(sqlConfig);
         
         let query = `
-            SELECT TOP 50
+            SELECT TOP 500
                 ISNULL(l.name, 'N/A') as PROVEEDOR,
                 w.FOLIO,
                 w.CREATED_ON as FECHA_ESTADO,
@@ -275,7 +275,7 @@ app.post('/api/waybills/range', async (req, res) => {
         await sql.connect(sqlConfig);
         
         let query = `
-            SELECT TOP 100
+            SELECT TOP 500
                 ISNULL(l.name, 'N/A') as PROVEEDOR,
                 w.FOLIO,
                 w.CREATED_ON as FECHA_ESTADO,
@@ -472,4 +472,5 @@ app.listen(PORT, () => {
         startKeepAlive();
     }, 30000);
 });
+
 
