@@ -184,7 +184,7 @@ app.post('/api/waybills', async (req, res) => {
                 w.CREATED_ON as FECHA_ESTADO,
                 ISNULL(p.name, 'N/A') as INSUMO,
                 SUM(w.total_weight) as PESAJE_TOTAL,
-                COUNT(*) as CANTIDAD_REGISTROS,
+                COUNT(DISTINCT w.ID) as CANTIDAD_GUIAS,
                 CASE 
                     WHEN ws.STATE = 1 THEN 'Generada'
                     WHEN ws.STATE = 4 THEN 'Recepcionada'
@@ -197,7 +197,7 @@ app.post('/api/waybills', async (req, res) => {
             INNER JOIN ANTARA.ANT_TRANSACTION_WAYBILL tw ON tw.ant_waybill_history_id = wh.id
             INNER JOIN antara.ANT_TRANSACTION tr ON tr.id = tw.ant_transaction_id
             LEFT JOIN [ANTARA].[ANT_PRODUCT] p ON p.id = tr.ant_product_id
-            LEFT JOIN [ANTARA].[ANT_WAYBILL_TRANSPORTATION] wt ON wt.ANT_WAYBILL_HISTORY_ID = wh.ANT_WAYBILL_ID
+            LEFT JOIN [ANTARA].[ANT_WAYBILL_TRANSPORTATION] wt ON wt.ANT_WAYBILL_HISTORY_ID = wh.ID
             LEFT JOIN [ANTARA].[ANT_TRANSPORTATION] t ON wt.ANT_TRANSPORTATION_ID = t.ID
             LEFT JOIN [ANTARA].[ANT_LOCATION] l ON t.LOCATION_ORIGIN_ID = l.ID
             WHERE CAST(w.CREATED_ON AS DATE) = @fecha
@@ -281,7 +281,7 @@ app.post('/api/waybills/range', async (req, res) => {
                 w.CREATED_ON as FECHA_ESTADO,
                 ISNULL(p.name, 'N/A') as INSUMO,
                 SUM(w.total_weight) as PESAJE_TOTAL,
-                COUNT(*) as CANTIDAD_REGISTROS,
+                COUNT(DISTINCT w.ID) as CANTIDAD_GUIAS,
                 CASE 
                     WHEN ws.STATE = 1 THEN 'Generada'
                     WHEN ws.STATE = 4 THEN 'Recepcionada'
@@ -294,7 +294,7 @@ app.post('/api/waybills/range', async (req, res) => {
             INNER JOIN ANTARA.ANT_TRANSACTION_WAYBILL tw ON tw.ant_waybill_history_id = wh.id
             INNER JOIN antara.ANT_TRANSACTION tr ON tr.id = tw.ant_transaction_id
             LEFT JOIN [ANTARA].[ANT_PRODUCT] p ON p.id = tr.ant_product_id
-            LEFT JOIN [ANTARA].[ANT_WAYBILL_TRANSPORTATION] wt ON wt.ANT_WAYBILL_HISTORY_ID = wh.ANT_WAYBILL_ID
+            LEFT JOIN [ANTARA].[ANT_WAYBILL_TRANSPORTATION] wt ON wt.ANT_WAYBILL_HISTORY_ID = wh.ID
             LEFT JOIN [ANTARA].[ANT_TRANSPORTATION] t ON wt.ANT_TRANSPORTATION_ID = t.ID
             LEFT JOIN [ANTARA].[ANT_LOCATION] l ON t.LOCATION_ORIGIN_ID = l.ID
             WHERE CAST(w.CREATED_ON AS DATE) BETWEEN @fechaDesde AND @fechaHasta
